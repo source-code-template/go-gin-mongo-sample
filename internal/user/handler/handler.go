@@ -30,12 +30,12 @@ func NewUserHandler(service sv.UserService, logError func(context.Context, strin
 }
 
 func (h *UserHandler) All(c *gin.Context) {
-	res, err := h.service.All(c.Request.Context())
+	users, err := h.service.All(c.Request.Context())
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, users)
 }
 
 func (h *UserHandler) Load(c *gin.Context) {
@@ -45,18 +45,17 @@ func (h *UserHandler) Load(c *gin.Context) {
 		return
 	}
 
-	res, err := h.service.Load(c.Request.Context(), id)
+	user, err := h.service.Load(c.Request.Context(), id)
 	if err != nil {
 		h.LogError(c.Request.Context(), fmt.Sprintf("Error to get user %s: %s", id, err.Error()))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
-	if res == nil {
-		c.JSON(http.StatusNotFound, res)
+	if user == nil {
+		c.JSON(http.StatusNotFound, user)
 	} else {
-		c.JSON(http.StatusOK, res)
+		c.JSON(http.StatusOK, user)
 	}
-
 }
 
 func (h *UserHandler) Create(c *gin.Context) {
