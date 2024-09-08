@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/core-go/core/header/gin"
 	"github.com/core-go/core/server"
 	"github.com/core-go/log/gin"
 	"github.com/core-go/log/zap"
@@ -10,6 +11,7 @@ type Config struct {
 	Server     server.ServerConfig `mapstructure:"server"`
 	Mongo      MongoConfig         `mapstructure:"mongo"`
 	Log        log.Config          `mapstructure:"log"`
+	Response   header.Config       `mapstructure:"response"`
 	MiddleWare gin.LogConfig       `mapstructure:"middleware"`
 }
 

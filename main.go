@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/core-go/config"
+	"github.com/core-go/core/header/gin"
+	"github.com/core-go/core/random"
 	"github.com/core-go/core/server"
 	"github.com/core-go/log/convert"
 	gm "github.com/core-go/log/gin"
@@ -33,6 +35,8 @@ func main() {
 
 	g.Use(logger.BuildContextWithMask())
 	g.Use(logger.Logger())
+	headerHandler := header.NewHeaderHandler(cfg.Response, GenerateId)
+	g.Use(headerHandler.HandleHeader())
 	g.Use(gin.Recovery())
 
 	err = app.Route(context.Background(), g, cfg)
@@ -46,6 +50,10 @@ func main() {
 	}
 }
 
+func GenerateId() string {
+	return random.Random(16)
+}
+
 func MaskLog(name, s string) string {
 	if name == "mobileNo" {
 		return strings.Mask(s, 2, 2, "x")
@@ -53,6 +61,7 @@ func MaskLog(name, s string) string {
 		return strings.Mask(s, 0, 5, "x")
 	}
 }
+
 func Mask(obj map[string]interface{}) {
 	v, ok := obj["phone"]
 	if ok {

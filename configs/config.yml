@@ -21,3 +21,7 @@ middleware:
   duration: duration
   size: size
   status: status
+
+response:
+  id: X-Response-Id
+  correlation: X-Correlation-Id
