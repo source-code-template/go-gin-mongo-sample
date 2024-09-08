@@ -11,6 +11,8 @@ func Route(ctx context.Context, g *gin.Engine, cfg Config) error {
 		return err
 	}
 
+	g.GET("/health", app.Health.Check)
+
 	userPath := g.Group("/users")
 	{
 		userPath.GET("", app.User.All)
