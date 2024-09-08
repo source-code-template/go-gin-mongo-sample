@@ -219,7 +219,11 @@ func (h *UserHandler) Delete(c *gin.Context) {
 
 func (h *UserHandler) Search(c *gin.Context) {
 	filter := model.UserFilter{Filter: &s.Filter{}}
-	s.Decode(c.Request, &filter, h.ParamIndex, h.FilterIndex)
+	err := s.Decode(c.Request, &filter, h.ParamIndex, h.FilterIndex)
+	if err != nil {
+		c.String(http.StatusBadRequest, err.Error())
+		return
+	}
 
 	offset := s.GetOffset(filter.Limit, filter.Page)
 	users, total, err := h.service.Search(c.Request.Context(), &filter, filter.Limit, offset)
