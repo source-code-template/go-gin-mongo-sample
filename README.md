@@ -231,10 +231,10 @@ DELETE /users/wolverine
 ```
 
 ## Common libraries
-- [core-go/health](https://github.com/core-go/health): include HealthHandler, HealthChecker, SqlHealthChecker
+- [core-go/health](https://github.com/core-go/health): include HealthHandler, HealthChecker, MongoHealthChecker
 - [core-go/config](https://github.com/core-go/config): to load the config file, and merge with other environments (SIT, UAT, ENV)
 - [core-go/log](https://github.com/core-go/log): logging
-- [core-go/middleware](https://github.com/core-go/log): middleware log tracing
+- [core-go/log/gin](https://github.com/core-go/log): middleware log tracing for [gin](https://github.com/gin-gonic/gin)
 
 ### core-go/health
 To check if the service is available, refer to [core-go/health](https://github.com/core-go/health)
@@ -275,17 +275,18 @@ package main
 
 import "github.com/core-go/config"
 
-type Root struct {
-    DB DatabaseConfig `mapstructure:"db"`
+type Config struct {
+	Mongo MongoConfig `mapstructure:"db"`
 }
 
-type DatabaseConfig struct {
-    Driver                 string `mapstructure:"driver"`
-    DataSourceName string `mapstructure:"data_source_name"`
+type MongoConfig struct {
+	Uri      string `yaml:"uri" mapstructure:"uri" json:"uri,omitempty" gorm:"column:uri" bson:"uri,omitempty" dynamodbav:"uri,omitempty" firestore:"uri,omitempty"`
+	Database string `yaml:"database" mapstructure:"database" json:"database,omitempty" gorm:"column:database" bson:"database,omitempty" dynamodbav:"database,omitempty" firestore:"database,omitempty"`
 }
+
 
 func main() {
-    var cfg Root
+    var cfg Config
     err := config.Load(&cfg, "configs/config")
     if err != nil {
         panic(err)
@@ -293,28 +294,6 @@ func main() {
 }
 ```
 
-### core-go/log *&* core-go/log/gin
-```go
-import (
-	"github.com/core-go/config"
-	"github.com/core-go/log"
-	"github.com/core-go/log/gin"
-	"github.com/gorilla/mux"
-)
-
-func main() {
-	var cfg app.Root
-	config.Load(&cfg, "configs/config")
-
-	r := mux.NewRouter()
-
-	log.Initialize(cfg.Log)
-	r.Use(mid.BuildContext)
-	logger := gin.NewLogger()
-	r.Use(mid.Logger(cfg.MiddleWare, log.InfoFields, logger))
-	r.Use(mid.Recover(log.ErrorMsg))
-}
-```
 To configure to ignore the health check, use "skips":
 ```yaml
 middleware:
