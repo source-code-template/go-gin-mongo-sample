@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/core-go/core"
+	s "github.com/core-go/search"
 	"github.com/gin-gonic/gin"
 
 	"go-service/internal/user/model"
@@ -14,16 +15,18 @@ import (
 )
 
 type UserHandler struct {
-	service  sv.UserService
-	Validate func(context.Context, interface{}) ([]core.ErrorMessage, error)
-	LogError func(context.Context, string, ...map[string]interface{})
-	jsonMap  map[string]int
+	service     sv.UserService
+	Validate    func(context.Context, interface{}) ([]core.ErrorMessage, error)
+	LogError    func(context.Context, string, ...map[string]interface{})
+	Map         map[string]int
+	ParamIndex  map[string]int
+	FilterIndex int
 }
 
-func NewUserHandler(service sv.UserService, validate func(context.Context, interface{}) ([]core.ErrorMessage, error), logError func(context.Context, string, ...map[string]interface{})) *UserHandler {
-	userType := reflect.TypeOf(model.User{})
-	_, jsonMap, _ := core.BuildMapField(userType)
-	return &UserHandler{service: service, Validate: validate, LogError: logError, jsonMap: jsonMap}
+func NewUserHandler(service sv.UserService, logError func(context.Context, string, ...map[string]interface{}), validate func(context.Context, interface{}) ([]core.ErrorMessage, error)) *UserHandler {
+	_, jsonMap, _ := core.BuildMapField(reflect.TypeOf(model.User{}))
+	paramIndex, filterIndex := s.BuildParams(reflect.TypeOf(model.UserFilter{}))
+	return &UserHandler{service: service, Validate: validate, LogError: logError, Map: jsonMap, ParamIndex: paramIndex, FilterIndex: filterIndex}
 }
 
 func (h *UserHandler) All(c *gin.Context) {
@@ -173,21 +176,21 @@ func (h *UserHandler) Patch(c *gin.Context) {
 		return
 	}
 
-	jsonObj, er1 := core.BodyToJsonMap(r, user, body, []string{"id"}, h.jsonMap)
+	jsonUser, er1 := core.BodyToJsonMap(r, user, body, []string{"id"}, h.Map)
 	if er1 != nil {
 		h.LogError(c.Request.Context(), er1.Error(), core.MakeMap(user))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
 
-	res, er2 := h.service.Patch(r.Context(), jsonObj)
+	res, er2 := h.service.Patch(r.Context(), jsonUser)
 	if er2 != nil {
-		h.LogError(c.Request.Context(), er2.Error(), core.MakeMap(jsonObj))
+		h.LogError(c.Request.Context(), er2.Error(), core.MakeMap(jsonUser))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
 	if res > 0 {
-		c.JSON(http.StatusOK, jsonObj)
+		c.JSON(http.StatusOK, jsonUser)
 	} else if res == 0 {
 		c.JSON(http.StatusNotFound, res)
 	} else {
@@ -213,4 +216,18 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusNotFound, res)
 	}
+}
+
+func (h *UserHandler) Search(c *gin.Context) {
+	filter := model.UserFilter{Filter: &s.Filter{}}
+	s.Decode(c.Request, &filter, h.ParamIndex, h.FilterIndex)
+
+	offset := s.GetOffset(filter.Limit, filter.Page)
+	users, total, err := h.service.Search(c.Request.Context(), &filter, filter.Limit, offset)
+	if err != nil {
+		h.LogError(c.Request.Context(), fmt.Sprintf("Error to to search %v: %s", filter, err.Error()))
+		c.String(http.StatusInternalServerError, core.InternalServerError)
+		return
+	}
+	c.JSON(http.StatusOK, &s.Result{List: &users, Total: total})
 }

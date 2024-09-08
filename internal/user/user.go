@@ -10,6 +10,7 @@ import (
 
 	"go-service/internal/user/handler"
 	"go-service/internal/user/repository/adapter"
+	"go-service/internal/user/repository/query"
 	"go-service/internal/user/service"
 )
 
@@ -20,6 +21,7 @@ type UserTransport interface {
 	Update(*gin.Context)
 	Patch(*gin.Context)
 	Delete(*gin.Context)
+	Search(*gin.Context)
 }
 
 func NewUserHandler(db *mongo.Database, logError func(context.Context, string, ...map[string]interface{})) (UserTransport, error) {
@@ -28,8 +30,8 @@ func NewUserHandler(db *mongo.Database, logError func(context.Context, string, .
 		return nil, err
 	}
 
-	userRepository := adapter.NewUserAdapter(db)
-	userService := service.NewUserService(userRepository)
-	userHandler := handler.NewUserHandler(userService, validator.Validate, logError)
+	userRepository := adapter.NewUserAdapter(db, query.BuildQuery)
+	userService := service.NewUserUseCase(userRepository)
+	userHandler := handler.NewUserHandler(userService, logError, validator.Validate)
 	return userHandler, nil
 }

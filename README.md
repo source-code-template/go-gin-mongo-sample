@@ -10,7 +10,54 @@ go run main.go
 ![Layer Architecture](https://cdn-images-1.medium.com/max/800/1*JDYTlK00yg0IlUjZ9-sp7Q.png)
 
 ### Layer Architecture with full features
-![Layer Architecture with standard features: config, health check, logging, middleware log tracing](https://cdn-images-1.medium.com/max/800/1*fJn_7LG9AKw06eeMwwgNlA.png)
+![Layer Architecture with standard features: config, health check, logging, middleware log tracing](https://cdn-images-1.medium.com/max/800/1*8UjJSv_tW0xBKFXKZu86MA.png)
+#### [core-go/search](https://github.com/core-go/search)
+- Build the search model at http handler
+- Build dynamic filter for mongo search
+### Search users: Support both GET and POST
+#### POST /users/search
+##### *Request:* POST /users/search
+In the below sample, search users with these criteria:
+- get users of page "1", with page size "20"
+- email="tony": get users with email starting with "tony"
+- dateOfBirth between "min" and "max" (between 1953-11-16 and 1976-11-16)
+- sort by phone ascending, id descending
+```json
+{
+    "page": 1,
+    "limit": 20,
+    "sort": "phone,-id",
+    "email": "tony",
+    "dateOfBirth": {
+        "min": "1953-11-16T00:00:00+07:00",
+        "max": "1976-11-16T00:00:00+07:00"
+    }
+}
+```
+##### GET /users/search?page=1&limit=2&email=tony&dateOfBirth.min=1953-11-16T00:00:00+07:00&dateOfBirth.max=1976-11-16T00:00:00+07:00&sort=phone,-id
+In this sample, search users with these criteria:
+- get users of page "1", with page size "20"
+- email="tony": get users with email starting with "tony"
+- dateOfBirth between "min" and "max" (between 1953-11-16 and 1976-11-16)
+- sort by phone ascending, id descending
+
+#### *Response:*
+- total: total of users, which is used to calculate numbers of pages at client
+- list: list of users
+```json
+{
+    "list": [
+        {
+            "id": "ironman",
+            "username": "tony.stark",
+            "email": "tony.stark@gmail.com",
+            "phone": "0987654321",
+            "dateOfBirth": "1963-03-24T17:00:00Z"
+        }
+    ],
+    "total": 1
+}
+```
 
 ## API Design
 ### Common HTTP methods
@@ -238,33 +285,33 @@ type DatabaseConfig struct {
 }
 
 func main() {
-    var conf Root
-    err := config.Load(&conf, "configs/config")
+    var cfg Root
+    err := config.Load(&cfg, "configs/config")
     if err != nil {
         panic(err)
     }
 }
 ```
 
-### core-go/log *&* core-go/log/middleware
+### core-go/log *&* core-go/log/gin
 ```go
 import (
 	"github.com/core-go/config"
 	"github.com/core-go/log"
-	mid "github.com/core-go/log/middleware"
+	"github.com/core-go/log/gin"
 	"github.com/gorilla/mux"
 )
 
 func main() {
-	var conf app.Root
-	config.Load(&conf, "configs/config")
+	var cfg app.Root
+	config.Load(&cfg, "configs/config")
 
 	r := mux.NewRouter()
 
-	log.Initialize(conf.Log)
+	log.Initialize(cfg.Log)
 	r.Use(mid.BuildContext)
-	logger := mid.NewLogger()
-	r.Use(mid.Logger(conf.MiddleWare, log.InfoFields, logger))
+	logger := gin.NewLogger()
+	r.Use(mid.Logger(cfg.MiddleWare, log.InfoFields, logger))
 	r.Use(mid.Recover(log.ErrorMsg))
 }
 ```

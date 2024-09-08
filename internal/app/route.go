@@ -19,6 +19,8 @@ func Route(ctx context.Context, g *gin.Engine, conf Config) error {
 		userPath.PUT("/:id", app.User.Update)
 		userPath.PATCH("/:id", app.User.Patch)
 		userPath.DELETE("/:id", app.User.Delete)
+		userPath.GET("/search", app.User.Search)
+		userPath.POST("/search", app.User.Search)
 	}
 
 	return nil

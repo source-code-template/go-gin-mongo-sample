@@ -7,20 +7,23 @@ import (
 	"reflect"
 	"strings"
 
-	mgo "github.com/core-go/mongo"
-	"go-service/internal/user/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+
+	mgo "github.com/core-go/mongo"
+	"go-service/internal/user/model"
 )
 
-func NewUserAdapter(db *mongo.Database) *UserAdapter {
+func NewUserAdapter(db *mongo.Database, buildQuery func(*model.UserFilter) (bson.D, bson.M)) *UserAdapter {
 	bsonMap := mgo.MakeBsonMap(reflect.TypeOf(model.User{}))
-	return &UserAdapter{Collection: db.Collection("users"), Map: bsonMap}
+	return &UserAdapter{Collection: db.Collection("users"), Map: bsonMap, BuildQuery: buildQuery}
 }
 
 type UserAdapter struct {
 	Collection *mongo.Collection
 	Map        map[string]string
+	BuildQuery func(*model.UserFilter) (bson.D, bson.M)
 }
 
 func (r *UserAdapter) All(ctx context.Context) ([]model.User, error) {
@@ -41,7 +44,7 @@ func (r *UserAdapter) Load(ctx context.Context, id string) (*model.User, error) 
 	filter := bson.M{"_id": id}
 	res := r.Collection.FindOne(ctx, filter)
 	if res.Err() != nil {
-		if strings.Contains(fmt.Sprint(res.Err()), "mongo: no documents in result") {
+		if strings.Compare(fmt.Sprint(res.Err()), "mongo: no documents in result") == 0 {
 			return nil, nil
 		} else {
 			return nil, res.Err()
@@ -98,4 +101,30 @@ func (r *UserAdapter) Delete(ctx context.Context, id string) (int64, error) {
 		return 0, err
 	}
 	return res.DeletedCount, err
+}
+
+func (r *UserAdapter) Search(ctx context.Context, filter *model.UserFilter, limit int64, offset int64) ([]model.User, int64, error) {
+	query, fields := r.BuildQuery(filter)
+	var users []model.User
+	total, err := r.Collection.CountDocuments(ctx, query)
+	if err != nil || total == 0 {
+		return users, total, err
+	}
+	opts := options.Find()
+	if len(filter.Sort) > 0 {
+		opts.SetSort(mgo.BuildSort(filter.Sort, reflect.TypeOf(model.UserFilter{})))
+	}
+	opts.SetSkip(offset)
+	if limit > 0 {
+		opts.SetLimit(limit)
+	}
+	if fields != nil {
+		opts.Projection = fields
+	}
+	cursor, err := r.Collection.Find(ctx, query, opts)
+	if err != nil {
+		return users, total, err
+	}
+	err = cursor.All(ctx, &users)
+	return users, total, err
 }
