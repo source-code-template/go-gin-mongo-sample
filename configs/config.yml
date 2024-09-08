@@ -1,0 +1,34 @@
+server:
+  name: go-gin-mongo-sample
+  port: 8080
+
+mongo:
+  uri: mongodb+srv://dbUser:Demoaccount1@projectdemo.g0lah.mongodb.net
+  database: masterdata
+
+log:
+  level: info
+  fields: appId,service,mobileNo,creditCard,corrId
+  duration: duration
+  map:
+    time: "@timestamp"
+    msg: message
+
+middleware:
+  log: true
+  skips: /health
+  request: request
+  response: response
+  duration: duration
+  size: size
+  status: status
+  masks: mobileNo,creditCard
+  constants:
+    app_id: "123"
+    service: payment
+  map:
+    mobile_no: header.mobileNo
+    credit_card: header.creditCard
+    corr_id: header.corrId
+    email: body.email
+    username: body.username
