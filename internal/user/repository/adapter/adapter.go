@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	mgo "github.com/core-go/mongo"
+
 	"go-service/internal/user/model"
 )
 

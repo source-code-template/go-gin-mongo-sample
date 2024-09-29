@@ -17,16 +17,17 @@ import (
 type UserHandler struct {
 	service     sv.UserService
 	Validate    func(context.Context, interface{}) ([]core.ErrorMessage, error)
-	LogError    func(context.Context, string, ...map[string]interface{})
+	Error       func(context.Context, string, ...map[string]interface{})
 	Map         map[string]int
 	ParamIndex  map[string]int
 	FilterIndex int
 }
 
 func NewUserHandler(service sv.UserService, logError func(context.Context, string, ...map[string]interface{}), validate func(context.Context, interface{}) ([]core.ErrorMessage, error)) *UserHandler {
-	_, jsonMap, _ := core.BuildMapField(reflect.TypeOf(model.User{}))
-	paramIndex, filterIndex := s.BuildParams(reflect.TypeOf(model.UserFilter{}))
-	return &UserHandler{service: service, Validate: validate, LogError: logError, Map: jsonMap, ParamIndex: paramIndex, FilterIndex: filterIndex}
+	userType := reflect.TypeOf(model.User{})
+	_, jsonMap, _ := core.BuildMapField(userType)
+	paramIndex, filterIndex := s.BuildAttributes(reflect.TypeOf(model.UserFilter{}))
+	return &UserHandler{service: service, Validate: validate, Map: jsonMap, Error: logError, ParamIndex: paramIndex, FilterIndex: filterIndex}
 }
 
 func (h *UserHandler) All(c *gin.Context) {
@@ -47,7 +48,7 @@ func (h *UserHandler) Load(c *gin.Context) {
 
 	user, err := h.service.Load(c.Request.Context(), id)
 	if err != nil {
-		h.LogError(c.Request.Context(), fmt.Sprintf("Error to get user %s: %s", id, err.Error()))
+		h.Error(c.Request.Context(), fmt.Sprintf("Error to get user %s: %s", id, err.Error()))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
@@ -70,7 +71,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 
 	errors, er2 := h.Validate(c.Request.Context(), &user)
 	if er2 != nil {
-		h.LogError(c.Request.Context(), er2.Error(), core.MakeMap(user))
+		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
@@ -81,7 +82,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 
 	res, er2 := h.service.Create(c.Request.Context(), &user)
 	if er2 != nil {
-		h.LogError(c.Request.Context(), er2.Error(), core.MakeMap(user))
+		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
@@ -117,7 +118,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 
 	errors, er2 := h.Validate(c.Request.Context(), &user)
 	if er2 != nil {
-		h.LogError(c.Request.Context(), er2.Error(), core.MakeMap(user))
+		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
@@ -128,7 +129,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 
 	res, er2 := h.service.Update(c.Request.Context(), &user)
 	if er2 != nil {
-		h.LogError(c.Request.Context(), er2.Error(), core.MakeMap(user))
+		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
@@ -152,7 +153,7 @@ func (h *UserHandler) Patch(c *gin.Context) {
 	var user model.User
 	body, er0 := core.BuildMapAndStruct(r, &user)
 	if er0 != nil {
-		h.LogError(c.Request.Context(), er0.Error(), core.MakeMap(user))
+		h.Error(c.Request.Context(), er0.Error(), core.MakeMap(user))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
@@ -165,7 +166,7 @@ func (h *UserHandler) Patch(c *gin.Context) {
 
 	errors, er2 := h.Validate(c.Request.Context(), &user)
 	if er2 != nil {
-		h.LogError(c.Request.Context(), er2.Error(), core.MakeMap(user))
+		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
@@ -177,14 +178,14 @@ func (h *UserHandler) Patch(c *gin.Context) {
 
 	jsonUser, er1 := core.BodyToJsonMap(r, user, body, []string{"id"}, h.Map)
 	if er1 != nil {
-		h.LogError(c.Request.Context(), er1.Error(), core.MakeMap(user))
+		h.Error(c.Request.Context(), er1.Error(), core.MakeMap(user))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
 
 	res, er2 := h.service.Patch(r.Context(), jsonUser)
 	if er2 != nil {
-		h.LogError(c.Request.Context(), er2.Error(), core.MakeMap(jsonUser))
+		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(jsonUser))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
@@ -206,7 +207,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 
 	res, err := h.service.Delete(c.Request.Context(), id)
 	if err != nil {
-		h.LogError(c.Request.Context(), fmt.Sprintf("Error to delete user %s: %s", id, err.Error()))
+		h.Error(c.Request.Context(), fmt.Sprintf("Error to delete user %s: %s", id, err.Error()))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}
@@ -228,7 +229,7 @@ func (h *UserHandler) Search(c *gin.Context) {
 	offset := s.GetOffset(filter.Limit, filter.Page)
 	users, total, err := h.service.Search(c.Request.Context(), &filter, filter.Limit, offset)
 	if err != nil {
-		h.LogError(c.Request.Context(), fmt.Sprintf("Error to to search %v: %s", filter, err.Error()))
+		h.Error(c.Request.Context(), fmt.Sprintf("Error to to search %v: %s", filter, err.Error()))
 		c.String(http.StatusInternalServerError, core.InternalServerError)
 		return
 	}

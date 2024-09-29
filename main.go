@@ -53,7 +53,6 @@ func main() {
 func GenerateId() string {
 	return random.Random(16)
 }
-
 func MaskLog(name, s string) string {
 	if name == "mobileNo" {
 		return strings.Mask(s, 2, 2, "x")
@@ -61,7 +60,6 @@ func MaskLog(name, s string) string {
 		return strings.Mask(s, 0, 5, "x")
 	}
 }
-
 func Mask(obj map[string]interface{}) {
 	v, ok := obj["phone"]
 	if ok {
