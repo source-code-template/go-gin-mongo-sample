@@ -1,12 +1,12 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"reflect"
 
 	"github.com/core-go/core"
+	g "github.com/core-go/core/handler/gin"
 	"github.com/core-go/search"
 	"github.com/gin-gonic/gin"
 
@@ -15,19 +15,17 @@ import (
 )
 
 type UserHandler struct {
-	service     service.UserService
-	Validate    func(context.Context, interface{}) ([]core.ErrorMessage, error)
-	Error       func(context.Context, string, ...map[string]interface{})
-	Map         map[string]int
-	ParamIndex  map[string]int
-	FilterIndex int
+	service  service.UserService
+	Validate core.Validate
+	*core.Attributes
+	*search.Parameters
 }
 
-func NewUserHandler(service service.UserService, logError func(context.Context, string, ...map[string]interface{}), validate func(context.Context, interface{}) ([]core.ErrorMessage, error)) *UserHandler {
+func NewUserHandler(service service.UserService, logError core.Log, validate core.Validate, action *core.ActionConfig) *UserHandler {
 	userType := reflect.TypeOf(model.User{})
-	_, jsonMap, _ := core.BuildMapField(userType)
-	paramIndex, filterIndex := search.BuildAttributes(reflect.TypeOf(model.UserFilter{}))
-	return &UserHandler{service: service, Validate: validate, Map: jsonMap, Error: logError, ParamIndex: paramIndex, FilterIndex: filterIndex}
+	parameters := search.CreateParameters(reflect.TypeOf(model.UserFilter{}), userType)
+	attributes := core.CreateAttributes(userType, logError, action)
+	return &UserHandler{service: service, Validate: validate, Attributes: attributes, Parameters: parameters}
 }
 
 func (h *UserHandler) All(c *gin.Context) {
@@ -40,181 +38,79 @@ func (h *UserHandler) All(c *gin.Context) {
 }
 
 func (h *UserHandler) Load(c *gin.Context) {
-	id := c.Param("id")
-	if len(id) == 0 {
-		c.String(http.StatusBadRequest, "Id cannot be empty")
-		return
-	}
-
-	user, err := h.service.Load(c.Request.Context(), id)
-	if err != nil {
-		h.Error(c.Request.Context(), fmt.Sprintf("Error to get user '%s': %s", id, err.Error()))
-		c.String(http.StatusInternalServerError, core.InternalServerError)
-		return
-	}
-	if user == nil {
-		c.JSON(http.StatusNotFound, user)
-	} else {
-		c.JSON(http.StatusOK, user)
+	id, err := g.GetRequiredString(c)
+	if err == nil {
+		user, err := h.service.Load(c.Request.Context(), id)
+		if err != nil {
+			h.Error(c.Request.Context(), fmt.Sprintf("Error to get user '%s': %s", id, err.Error()))
+			c.String(http.StatusInternalServerError, core.InternalServerError)
+			return
+		}
+		c.JSON(core.IsFound(user), user)
 	}
 }
 
 func (h *UserHandler) Create(c *gin.Context) {
 	var user model.User
-	er1 := c.ShouldBindJSON(&user)
-
-	defer c.Request.Body.Close()
-	if er1 != nil {
-		c.String(http.StatusInternalServerError, er1.Error())
-		return
-	}
-
-	errors, er2 := h.Validate(c.Request.Context(), &user)
-	if er2 != nil {
-		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
-		c.String(http.StatusInternalServerError, core.InternalServerError)
-		return
-	}
-	if len(errors) > 0 {
-		c.JSON(http.StatusUnprocessableEntity, errors)
-		return
-	}
-
-	res, er2 := h.service.Create(c.Request.Context(), &user)
-	if er2 != nil {
-		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
-		c.String(http.StatusInternalServerError, core.InternalServerError)
-		return
-	}
-	if res > 0 {
-		c.JSON(http.StatusCreated, user)
-	} else {
-		c.JSON(http.StatusConflict, res)
+	er1 := g.Decode(c, &user)
+	if er1 == nil {
+		errors, er2 := h.Validate(c.Request.Context(), &user)
+		if !g.HasError(c, errors, er2, h.Error, user, h.Log, h.Resource, h.Action.Create) {
+			res, er3 := h.service.Create(c.Request.Context(), &user)
+			g.AfterCreated(c, &user, res, er3, h.Error)
+		}
 	}
 }
 
 func (h *UserHandler) Update(c *gin.Context) {
 	var user model.User
-	er1 := c.BindJSON(&user)
-	defer c.Request.Body.Close()
+	er1 := g.DecodeAndCheckId(c, &user, h.Keys, h.Indexes)
+	if er1 == nil {
+		errors, er2 := h.Validate(c.Request.Context(), &user)
+		if !g.HasError(c, errors, er2, h.Error, user, h.Log, h.Resource, h.Action.Update) {
+			res, er3 := h.service.Update(c.Request.Context(), &user)
+			if er3 != nil {
+				h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
+				c.String(http.StatusInternalServerError, core.InternalServerError)
+				return
+			}
 
-	if er1 != nil {
-		c.String(http.StatusInternalServerError, er1.Error())
-		return
-	}
-
-	id := c.Param("id")
-	if len(id) == 0 {
-		c.String(http.StatusBadRequest, "Id cannot be empty")
-		return
-	}
-
-	if len(user.Id) == 0 {
-		user.Id = id
-	} else if id != user.Id {
-		c.String(http.StatusBadRequest, "Id not match")
-		return
-	}
-
-	errors, er2 := h.Validate(c.Request.Context(), &user)
-	if er2 != nil {
-		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
-		c.String(http.StatusInternalServerError, core.InternalServerError)
-		return
-	}
-	if len(errors) > 0 {
-		c.JSON(http.StatusUnprocessableEntity, errors)
-		return
-	}
-
-	res, er2 := h.service.Update(c.Request.Context(), &user)
-	if er2 != nil {
-		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
-		c.String(http.StatusInternalServerError, core.InternalServerError)
-		return
-	}
-	if res > 0 {
-		c.JSON(http.StatusOK, user)
-	} else if res == 0 {
-		c.JSON(http.StatusNotFound, res)
-	} else {
-		c.JSON(http.StatusConflict, res)
+			if res > 0 {
+				c.JSON(http.StatusOK, user)
+			} else if res == 0 {
+				c.JSON(http.StatusNotFound, res)
+			} else {
+				c.JSON(http.StatusConflict, res)
+			}
+		}
 	}
 }
 
 func (h *UserHandler) Patch(c *gin.Context) {
-	id := c.Param("id")
-	if len(id) == 0 {
-		c.String(http.StatusBadRequest, "Id cannot be empty")
-		return
-	}
-
-	r := c.Request
 	var user model.User
-	body, er0 := core.BuildMapAndStruct(r, &user)
-	if er0 != nil {
-		h.Error(c.Request.Context(), er0.Error(), core.MakeMap(user))
-		c.String(http.StatusInternalServerError, core.InternalServerError)
-		return
-	}
-	if len(user.Id) == 0 {
-		user.Id = id
-	} else if id != user.Id {
-		c.String(http.StatusBadRequest, "Id not match")
-		return
-	}
-
-	errors, er2 := h.Validate(c.Request.Context(), &user)
-	if er2 != nil {
-		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
-		c.String(http.StatusInternalServerError, core.InternalServerError)
-		return
-	}
-	errors = core.RemoveRequiredError(errors)
-	if len(errors) > 0 {
-		c.JSON(http.StatusUnprocessableEntity, errors)
-		return
-	}
-
-	jsonUser, er1 := core.BodyToJsonMap(r, user, body, []string{"id"}, h.Map)
-	if er1 != nil {
-		h.Error(c.Request.Context(), er1.Error(), core.MakeMap(user))
-		c.String(http.StatusInternalServerError, core.InternalServerError)
-		return
-	}
-
-	res, er2 := h.service.Patch(r.Context(), jsonUser)
-	if er2 != nil {
-		h.Error(c.Request.Context(), er2.Error(), core.MakeMap(jsonUser))
-		c.String(http.StatusInternalServerError, core.InternalServerError)
-		return
-	}
-	if res > 0 {
-		c.JSON(http.StatusOK, jsonUser)
-	} else if res == 0 {
-		c.JSON(http.StatusNotFound, res)
-	} else {
-		c.JSON(http.StatusConflict, res)
+	jsonUser, er1 := g.BuildMapAndCheckId(c, &user, h.Keys, h.Indexes)
+	if er1 == nil {
+		errors, er2 := h.Validate(c.Request.Context(), &user)
+		if !g.HasError(c, errors, er2, h.Error, user, h.Log, h.Resource, h.Action.Update) {
+			res, er3 := h.service.Patch(c.Request.Context(), jsonUser)
+			g.AfterSaved(c, jsonUser, res, er3, h.Error)
+		}
 	}
 }
 
 func (h *UserHandler) Delete(c *gin.Context) {
-	id := c.Param("id")
-	if len(id) == 0 {
-		c.String(http.StatusBadRequest, "Id cannot be empty")
-		return
-	}
-
-	res, err := h.service.Delete(c.Request.Context(), id)
-	if err != nil {
-		h.Error(c.Request.Context(), fmt.Sprintf("Error to delete user '%s': %s", id, err.Error()))
-		c.String(http.StatusInternalServerError, core.InternalServerError)
-		return
-	}
-	if res > 0 {
-		c.JSON(http.StatusOK, res)
-	} else {
-		c.JSON(http.StatusNotFound, res)
+	id, err := g.GetRequiredString(c)
+	if err == nil {
+		res, err := h.service.Delete(c.Request.Context(), id)
+		if err != nil {
+			c.String(http.StatusInternalServerError, fmt.Sprintf("Error to delete user '%s': %s", id, err.Error()))
+			return
+		}
+		if res > 0 {
+			c.JSON(http.StatusOK, res)
+		} else {
+			c.JSON(http.StatusNotFound, res)
+		}
 	}
 }
 

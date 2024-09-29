@@ -26,7 +26,7 @@ func NewApp(ctx context.Context, cfg Config) (*ApplicationContext, error) {
 	db := client.Database(cfg.Mongo.Database)
 	logError := log.LogError
 
-	userHandler, err := user.NewUserHandler(db, logError)
+	userHandler, err := user.NewUserHandler(db, logError, cfg.Action)
 	if err != nil {
 		return nil, err
 	}

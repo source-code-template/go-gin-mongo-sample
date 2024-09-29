@@ -1,10 +1,9 @@
 package user
 
 import (
-	"context"
-
 	"go.mongodb.org/mongo-driver/mongo"
 
+	"github.com/core-go/core"
 	v "github.com/core-go/core/v10"
 	"github.com/gin-gonic/gin"
 
@@ -24,7 +23,7 @@ type UserTransport interface {
 	Search(*gin.Context)
 }
 
-func NewUserHandler(db *mongo.Database, logError func(context.Context, string, ...map[string]interface{})) (UserTransport, error) {
+func NewUserHandler(db *mongo.Database, logError core.Log, action *core.ActionConfig) (UserTransport, error) {
 	validator, err := v.NewValidator()
 	if err != nil {
 		return nil, err
@@ -32,6 +31,6 @@ func NewUserHandler(db *mongo.Database, logError func(context.Context, string, .
 
 	userRepository := adapter.NewUserAdapter(db, query.BuildQuery)
 	userService := service.NewUserService(userRepository)
-	userHandler := handler.NewUserHandler(userService, logError, validator.Validate)
+	userHandler := handler.NewUserHandler(userService, logError, validator.Validate, action)
 	return userHandler, nil
 }
