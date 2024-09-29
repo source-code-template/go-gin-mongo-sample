@@ -4,10 +4,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/core-go/core"
-	v "github.com/core-go/core/v10"
+	v "github.com/core-go/core/validator"
 	"github.com/gin-gonic/gin"
 
 	"go-service/internal/user/handler"
+	"go-service/internal/user/model"
 	"go-service/internal/user/repository/adapter"
 	"go-service/internal/user/repository/query"
 	"go-service/internal/user/service"
@@ -24,7 +25,7 @@ type UserTransport interface {
 }
 
 func NewUserHandler(db *mongo.Database, logError core.Log, action *core.ActionConfig) (UserTransport, error) {
-	validator, err := v.NewValidator()
+	validator, err := v.NewValidator[*model.User]()
 	if err != nil {
 		return nil, err
 	}

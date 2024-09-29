@@ -6,7 +6,7 @@ import (
 	"reflect"
 
 	"github.com/core-go/core"
-	g "github.com/core-go/core/handler/gin"
+	g "github.com/core-go/core/gin"
 	"github.com/core-go/search"
 	"github.com/gin-gonic/gin"
 
@@ -16,12 +16,12 @@ import (
 
 type UserHandler struct {
 	service  service.UserService
-	Validate core.Validate
+	Validate core.Validate[*model.User]
 	*core.Attributes
 	*search.Parameters
 }
 
-func NewUserHandler(service service.UserService, logError core.Log, validate core.Validate, action *core.ActionConfig) *UserHandler {
+func NewUserHandler(service service.UserService, logError core.Log, validate core.Validate[*model.User], action *core.ActionConfig) *UserHandler {
 	userType := reflect.TypeOf(model.User{})
 	parameters := search.CreateParameters(reflect.TypeOf(model.UserFilter{}), userType)
 	attributes := core.CreateAttributes(userType, logError, action)
@@ -51,8 +51,7 @@ func (h *UserHandler) Load(c *gin.Context) {
 }
 
 func (h *UserHandler) Create(c *gin.Context) {
-	var user model.User
-	er1 := g.Decode(c, &user)
+	user, er1 := g.Decode[model.User](c)
 	if er1 == nil {
 		errors, er2 := h.Validate(c.Request.Context(), &user)
 		if !g.HasError(c, errors, er2, h.Error, user, h.Log, h.Resource, h.Action.Create) {
@@ -63,32 +62,18 @@ func (h *UserHandler) Create(c *gin.Context) {
 }
 
 func (h *UserHandler) Update(c *gin.Context) {
-	var user model.User
-	er1 := g.DecodeAndCheckId(c, &user, h.Keys, h.Indexes)
+	user, er1 := g.DecodeAndCheckId[model.User](c, h.Keys, h.Indexes)
 	if er1 == nil {
 		errors, er2 := h.Validate(c.Request.Context(), &user)
 		if !g.HasError(c, errors, er2, h.Error, user, h.Log, h.Resource, h.Action.Update) {
 			res, er3 := h.service.Update(c.Request.Context(), &user)
-			if er3 != nil {
-				h.Error(c.Request.Context(), er2.Error(), core.MakeMap(user))
-				c.String(http.StatusInternalServerError, core.InternalServerError)
-				return
-			}
-
-			if res > 0 {
-				c.JSON(http.StatusOK, user)
-			} else if res == 0 {
-				c.JSON(http.StatusNotFound, res)
-			} else {
-				c.JSON(http.StatusConflict, res)
-			}
+			g.AfterSaved(c, &user, res, er3, h.Error)
 		}
 	}
 }
 
 func (h *UserHandler) Patch(c *gin.Context) {
-	var user model.User
-	jsonUser, er1 := g.BuildMapAndCheckId(c, &user, h.Keys, h.Indexes)
+	user, jsonUser, er1 := g.BuildMapAndCheckId[model.User](c, h.Keys, h.Indexes)
 	if er1 == nil {
 		errors, er2 := h.Validate(c.Request.Context(), &user)
 		if !g.HasError(c, errors, er2, h.Error, user, h.Log, h.Resource, h.Action.Update) {
@@ -102,15 +87,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	id, err := g.GetRequiredString(c)
 	if err == nil {
 		res, err := h.service.Delete(c.Request.Context(), id)
-		if err != nil {
-			c.String(http.StatusInternalServerError, fmt.Sprintf("Error to delete user '%s': %s", id, err.Error()))
-			return
-		}
-		if res > 0 {
-			c.JSON(http.StatusOK, res)
-		} else {
-			c.JSON(http.StatusNotFound, res)
-		}
+		g.AfterDeleted(c, res, err, h.Error)
 	}
 }
 
